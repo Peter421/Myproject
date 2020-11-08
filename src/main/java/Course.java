@@ -13,11 +13,12 @@ import java.util.*;
 public class Course {
   public String name;
   public ArrayList<Student> students = new ArrayList();
+  public ArrayList<Student> s1 = new ArrayList();
   public ArrayList<Module> modules = new ArrayList();
   public LocalDate SDate;
   public LocalDate EDate;
   Student s = null;
-  static Course c = null;
+   static Course c = null;
   
   public Course(String name,LocalDate SDate,LocalDate EDaate){
       this.name=name;
@@ -39,13 +40,28 @@ public class Course {
       if(m.courses.contains(this)== false)
       m.courses.add(this);
       
-      students.addAll(m.students);
+     // students = m.students.add(s);
+       s = m.st;
       
-
-      s = m.st;
+      
       if(s !=null){
+          if(s.courses.contains(this)==false)
       s.courses.add(this);
-      
+        //  m.students.get(i)
+     if(students.contains(s) == false){
+           students.addAll(m.students);
+           for(int i=0;i<students.size();i++){
+               if (!s1.contains(students.get(i)))
+                   s1.add(students.get(i));
+               
+              if( students.get(i).courses.contains(this) == false)
+               students.get(i).courses.add(this);
+               
+            //m.students.get(i).courses.add(this);
+           }
+     }
+   
+          
       }
       
   }
@@ -62,7 +78,7 @@ public class Course {
 */
     public String getStudents(){
      
-        return students.toString();
+        return s1.toString();
     }
      public String toString() {
         return this.name;

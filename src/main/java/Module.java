@@ -26,17 +26,20 @@ public class Module {
      public void addStudent(Student s){
          st = s;
          c = Course.c;
+         if(students.contains(s) != true)
          students.add(s);
-        // if(s.modules.contains(this)== false)
+  
               s.modules.add(this); 
          
-           s.courses.addAll(courses);
+          
+         
+          s.courses.addAll(courses);
            
-           if(c != null){
+          /* if(c != null){
                c.students.add(s);
            }
-         
-
+         */
+        
          
      }
      
