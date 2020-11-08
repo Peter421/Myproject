@@ -1,0 +1,354 @@
+Skip to content
+Search or jump to…
+
+Pull requests
+Issues
+Marketplace
+Explore
+ 
+@Peter421 
+Learn Git and GitHub without any code!
+Using the Hello World guide, you’ll start a branch, write comments, and open a pull request.
+
+
+Peter421
+/
+MyprojectTest
+1
+00
+Code
+Issues
+Pull requests
+Actions
+Projects
+Wiki
+Security
+Insights
+Settings
+MyprojectTest/Shippable.yml
+@Peter421
+Peter421 Create Shippable.yml
+Latest commit 38a5b6c 2 minutes ago
+ History
+ 1 contributor
+307 lines (295 sloc)  11.4 KB
+  
+language: node_js
+
+node_js:
+  - 8.11.3
+
+build:
+  ci:
+    - npm install -g jshint
+    - jshint .
+
+resources:
+  - name: admiral_sh_repo
+    type: gitRepo
+    integration: avinci_gh
+    versionTemplate:
+      sourceName: "shippable/admiral"
+      branch: master
+
+  - name: u16admiral_sh_img
+    type: image
+    integration: aws_bits_access
+    versionTemplate:
+      sourceName: "374168611083.dkr.ecr.us-east-1.amazonaws.com/u16admiral"
+      versionName: master
+
+  - name: u14admiral_sh_img
+    type: image
+    integration: aws_bits_access
+    versionTemplate:
+      sourceName: "374168611083.dkr.ecr.us-east-1.amazonaws.com/u14admiral"
+      versionName: master
+
+jobs:
+  - name: u14admiral_x8664_build
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    runtime:
+      nodePool: u14_cache_x86
+    steps:
+      - IN: admiral_sh_repo
+        switch: off
+      - IN: admiral_runCI
+      - IN: u14microbase_dd_img
+      - IN: shipit_bits_access_cli
+        switch: off
+        scopes:
+          - ecr
+      - TASK:
+          name: u14admiral_build
+          runtime:
+            options:
+              env:
+                - IMG_BASE: "u14microbase_dd_img"
+                - IMG_OUT: "u14admiral_sh_img"
+                - RES_REPO: "admiral_sh_repo"
+                - IMG: "u14admiral"
+                - ADMIRAL_OS: "14"
+          script:
+            - REL_VER=$(shipctl get_resource_version_key "$IMG_BASE" "versionName")
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_REPO" "shaData.commitSha")
+            - IMG_NAME=$(shipctl get_resource_version_key $IMG_OUT "sourceName")
+            - pushd $(shipctl get_resource_state "$RES_REPO")
+            - shipctl replace Dockerfile
+            - docker build -t=$IMG_NAME:$REL_VER --pull .
+            - docker push $IMG_NAME:$REL_VER
+            - aws ecr list-images --repository-name $IMG --query 'imageIds[?type(imageTag)!=`string`].[imageDigest]' --output text | while read line; do aws ecr batch-delete-image --repository-name $IMG --image-ids imageDigest=$line; done
+      - OUT: u14admiral_sh_img
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REL_VER" "IMG_REPO_COMMIT_SHA=$REPO_COMMIT"
+        - shipctl put_resource_state_multi $IMG_OUT "versionName=$REL_VER" "IMG_REPO_COMMIT_SHA=$REPO_COMMIT" "BUILD_NUMBER=$BUILD_NUMBER"
+
+  - name: u16admiral_x8664_build
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: admiral_sh_repo
+        switch: off
+      - IN: admiral_runCI
+      - IN: u16microbase_dd_img
+      - IN: shipit_bits_access_cli
+        switch: off
+        scopes:
+          - ecr
+      - TASK:
+          name: u16admiral_build
+          runtime:
+            options:
+              env:
+                - IMG_BASE: "u16microbase_dd_img"
+                - IMG_OUT: "u16admiral_sh_img"
+                - RES_REPO: "admiral_sh_repo"
+                - IMG: "u16admiral"
+                - ADMIRAL_OS: "16"
+          script:
+            - REL_VER=$(shipctl get_resource_version_key "$IMG_BASE" "versionName")
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_REPO" "shaData.commitSha")
+            - IMG_NAME=$(shipctl get_resource_version_key $IMG_OUT "sourceName")
+            - pushd $(shipctl get_resource_state "$RES_REPO")
+            - shipctl replace Dockerfile
+            - docker build -t=$IMG_NAME:$REL_VER --pull --no-cache .
+            - docker push $IMG_NAME:$REL_VER
+            - aws ecr list-images --repository-name $IMG --query 'imageIds[?type(imageTag)!=`string`].[imageDigest]' --output text | while read line; do aws ecr batch-delete-image --repository-name $IMG --image-ids imageDigest=$line; done
+      - OUT: u16admiral_sh_img
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REL_VER" "IMG_REPO_COMMIT_SHA=$REPO_COMMIT"
+        - shipctl put_resource_state_multi $IMG_OUT "versionName=$REL_VER" "IMG_REPO_COMMIT_SHA=$REPO_COMMIT" "BUILD_NUMBER=$BUILD_NUMBER"
+
+  - name: admiral_file_pack
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: admiral_sh_repo
+        switch: off
+      - IN: admiral_runCI
+      - IN: shipit_bits_access_cli
+        switch: off
+      - TASK:
+          name: admiral_file_pack
+          runtime:
+            options:
+              env:
+                - CONTEXT: "admiral"
+                - TAG_VER: "master"
+                - S3_URL: "s3://shippable-artifacts/admiral"
+                - WEB_URL: "https://s3.amazonaws.com/shippable-artifacts/admiral"
+                - RES_REPO: "admiral_sh_repo"
+          script:
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_REPO" "shaData.commitSha")
+            - pushd $(shipctl get_resource_state "$RES_REPO")
+            - |
+               TAR_FILENAME="$CONTEXT-$TAG_VER.tar.gz"
+               git archive --format=tar.gz --output="/tmp/$TAR_FILENAME" --prefix=$CONTEXT/ $TAG_VER
+               aws s3 cp --acl public-read "/tmp/$TAR_FILENAME" "$S3_URL/$TAG_VER/"
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REPO_COMMIT" "TAG_VER=$TAG_VER" "FILE_REPO_COMMIT_SHA=$REPO_COMMIT" "WEB_URL=$WEB_URL" "S3_URL=$S3_URL" "TAR_FILENAME=$TAR_FILENAME"
+
+  - name: admiral_repo_tag
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: prod_release
+      - IN: admiral_sh_repo
+        switch: off
+      - IN: shipit_gh_ssh
+        switch: off
+      - TASK:
+          name: admiral_repo_tag
+          runtime:
+            options:
+              env:
+                - RES_VER: "prod_release"
+                - RES_REPO: "admiral_sh_repo"
+                - GIT_PATH: "git@github.com:Shippable/admiral.git"
+          script:
+            - export REL_VER=$(shipctl get_resource_version_key "$RES_VER" "versionName")
+            - |
+               pushd $(shipctl get_resource_meta "shipit_gh_ssh")
+                 shipctl get_json_value integration.json 'privateKey' > gh_ssh.key
+                 chmod 600 gh_ssh.key
+                 ssh-add gh_ssh.key
+               popd
+            - pushd $(shipctl get_resource_state "$RES_REPO")
+            - |
+               git remote add up $GIT_PATH
+               git remote -v
+               git checkout master
+            - |
+               git pull --tags
+               if git tag -d $REL_VER; then
+                 git push --delete up $REL_VER
+               fi
+            - |
+               export REL_VER_DATE=$(date +"%A, %b %d %Y")
+               local template_file="releaseNotes/template.md"
+               local master_notes="releaseNotes/master.md"
+               local new_notes="releaseNotes/$REL_VER.md"
+               shipctl replace $master_notes
+               cp $master_notes $new_notes
+               cp $template_file $master_notes
+               echo "$REL_VER" > "version.txt"
+               git add .
+               git commit -m "updating version.txt to $REL_VER and adding release notes" || true
+               git push up master
+            - |
+               REPO_COMMIT=$(git rev-parse HEAD)
+               git tag $REL_VER
+               git push up $REL_VER
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REL_VER" "TAG_COMMIT_SHA=$REPO_COMMIT" "TAG_IMG=$REL_VER"
+
+  - name: u16admiral_tag
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: admiral_repo_tag
+      - IN: u16admiral_sh_img
+        switch: off
+      - IN: shipit_bits_access_cli
+        switch: off
+        scopes:
+          - ecr
+      - TASK:
+          name: u16admiral_tag
+          runtime:
+            options:
+              env:
+                - RES_VER: "admiral_repo_tag"
+                - RES_IMG: "u16admiral_sh_img"
+          script:
+            - REL_VER=$(shipctl get_resource_version_key "$RES_VER" "versionName")
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_IMG" "shaData.commitSha")
+            - |
+               IMG_NAME=$(shipctl get_resource_version_key "$RES_IMG" "sourceName")
+               UP_IMG_TAG=$(shipctl get_resource_version_key "$RES_IMG" "versionName")
+            - docker pull "$IMG_NAME:$UP_IMG_TAG"
+            - |
+               docker tag "$IMG_NAME:$UP_IMG_TAG" "$IMG_NAME:$REL_VER"
+               docker push "$IMG_NAME:$REL_VER"
+            - |
+               docker tag "$IMG_NAME:$UP_IMG_TAG" "$IMG_NAME:latest"
+               docker push "$IMG_NAME:latest"
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REL_VER" "TAG_COMMIT_SHA=$REPO_COMMIT" "TAG_IMG=$REL_VER"
+
+  - name: u14admiral_tag
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: admiral_repo_tag
+      - IN: u14admiral_sh_img
+        switch: off
+      - IN: shipit_bits_access_cli
+        switch: off
+        scopes:
+          - ecr
+      - TASK:
+          name: u14_tag
+          runtime:
+            options:
+              env:
+                - RES_VER: "admiral_repo_tag"
+                - RES_IMG: "u14admiral_sh_img"
+          script:
+            - REL_VER=$(shipctl get_resource_version_key "$RES_VER" "versionName")
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_IMG" "shaData.commitSha")
+            - |
+               IMG_NAME=$(shipctl get_resource_version_key "$RES_IMG" "sourceName")
+               UP_IMG_TAG=$(shipctl get_resource_version_key "$RES_IMG" "versionName")
+            - docker pull "$IMG_NAME:$UP_IMG_TAG"
+            - |
+               docker tag "$IMG_NAME:$UP_IMG_TAG" "$IMG_NAME:$REL_VER"
+               docker push "$IMG_NAME:$REL_VER"
+            - |
+               docker tag "$IMG_NAME:$UP_IMG_TAG" "$IMG_NAME:latest"
+               docker push "$IMG_NAME:latest"
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REL_VER" "TAG_COMMIT_SHA=$REPO_COMMIT" "TAG_IMG=$REL_VER"
+
+  - name: admiral_file_tag
+    type: runSh
+    triggerMode: parallel
+    dependencyMode: strict
+    steps:
+      - IN: u16admiral_tag
+      - IN: u14admiral_tag
+        switch: off
+      - IN: admiral_file_pack
+        switch: off
+      - IN: admiral_sh_repo
+        switch: off
+      - IN: shipit_bits_access_cli
+        switch: off
+      - TASK:
+          name: admiral_file_tag
+          runtime:
+            options:
+              env:
+                - ARTIFACTS_BUCKET: "s3://shippable-artifacts/admiral"
+                - RES_VER: "u16admiral_tag"
+                - RES_FILE: "admiral_file_pack"
+                - RES_REPO: "admiral_sh_repo"
+                - CONTEXT: "admiral"
+          script:
+            - TAG_VER=$(shipctl get_resource_version_key "$RES_VER" "versionName")
+            - S3_URL=$(shipctl get_resource_version_key "$RES_FILE" "S3_URL")
+            - REPO_COMMIT=$(shipctl get_resource_version_key "$RES_REPO" "shaData.commitSha")
+            - UP_TAG_VER=$(shipctl get_resource_version_key "$RES_FILE" "TAG_VER")
+            - UP_TAR_FILENAME=$(shipctl get_resource_version_key "$RES_FILE" "TAR_FILENAME")
+            - S3_URL=$(shipctl get_resource_version_key "$RES_FILE" "S3_URL")
+            - WEB_URL=$(shipctl get_resource_version_key "$RES_FILE" "WEB_URL")
+            - TAR_FILENAME=$CONTEXT-$TAG_VER.tar.gz
+            - aws s3 cp --acl public-read "$S3_URL/$UP_TAG_VER/$UP_TAR_FILENAME" "$S3_URL/$TAG_VER/$TAR_FILENAME"
+    on_success:
+      script:
+        - shipctl put_resource_state_multi $JOB_NAME "versionName=$REPO_COMMIT" "FILE_REPO_COMMIT_SHA=$REPO_COMMIT" "WEB_URL=$WEB_URL" "S3_URL=$S3_URL" "TAR_FILENAME=$TAR_FILENAME"
+© 2020 GitHub, Inc.
+Terms
+Privacy
+Security
+Status
+Help
+Contact GitHub
+Pricing
+API
+Training
+Blog
+About
