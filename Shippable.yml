@@ -1,0 +1,4 @@
+name: Myproject_runCI
+type: runCI
+steps:
+  - IN: Myproject_ciRepo
