@@ -17,8 +17,7 @@ public class Course {
   public ArrayList<Module> modules = new ArrayList();
   public LocalDate SDate;
   public LocalDate EDate;
-  Student s = null;
-   static Course c = null;
+ 
   
   public Course(String name,LocalDate SDate,LocalDate EDaate){
       this.name=name;
@@ -33,22 +32,13 @@ public class Course {
     }
   
   public void addModule(Module m){
-      c = this;
+     
       
       modules.add(m);
       
       if(m.courses.contains(this)== false)
       m.courses.add(this);
-      
-     // students = m.students.add(s);
-       s = m.st;
-      
-      
-      if(s !=null){
-          if(s.courses.contains(this)==false)
-      s.courses.add(this);
-        //  m.students.get(i)
-     if(students.contains(s) == false){
+     
            students.addAll(m.students);
            for(int i=0;i<students.size();i++){
                if (!s1.contains(students.get(i)))
@@ -58,13 +48,13 @@ public class Course {
                students.get(i).courses.add(this);
                
             //m.students.get(i).courses.add(this);
-           }
+           
      }
    
           
       }
       
-  }
+  
   
   /* public void addStudent(Student s){
          
