@@ -14,9 +14,7 @@ public class Module {
      String module;
      ArrayList<Student> students = new ArrayList();
      public ArrayList<Course> courses = new ArrayList();
-      boolean sw = false;
-      Student st = null;
-      Course c = null;
+    
    
     public Module(String module){
          this.module = module;
@@ -24,8 +22,7 @@ public class Module {
      }
      
      public void addStudent(Student s){
-         st = s;
-         c = Course.c;
+       
          if(students.contains(s) != true)
          students.add(s);
   
@@ -34,12 +31,7 @@ public class Module {
           
          
           s.courses.addAll(courses);
-           
-          /* if(c != null){
-               c.students.add(s);
-           }
-         */
-        
+       
          
      }
      
